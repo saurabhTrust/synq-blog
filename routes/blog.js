@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const blogController = require('../components/blogController');
+const blogController = require('../controllers/blogController');
 const upload = require('../middlewares/upload');
 // const { verifyToken } = require('../middleware/auth'); // mentor will handle auth
 
@@ -77,5 +77,12 @@ router.get(
   // verifyToken (mentor will add)
   blogController.getAllBlogs
 );
+
+router.delete(
+  '/blog/:blogId',
+  // verifyToken
+  blogController.deleteBlog
+);
+
 
 module.exports = router;
