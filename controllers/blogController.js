@@ -169,9 +169,6 @@ const updateBlog = async (req, res) => {
       // if (blog.coverImage) await unpinFromIPFS(oldCid);
     }
 
-    // ❗ IMPORTANT:
-    // Do NOT touch blog.status
-    // Do NOT touch publishedAt
 
     await blog.save();
 
