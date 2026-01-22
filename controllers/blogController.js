@@ -198,7 +198,7 @@ const getAllBlogs = async (req, res) => {
     const blogs = await Blog.find(filter)
       .sort({ createdAt: -1 })
       .select(
-        'title subTitle coverImage status createdAt publishedAt'
+        'title subTitle description coverImage status createdAt publishedAt'
       );
 
     return res.status(200).json({

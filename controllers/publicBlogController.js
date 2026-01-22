@@ -10,7 +10,7 @@ const getPublishedBlogs = async (req, res) => {
     })
       .sort({ publishedAt: -1 })
       .select(
-        'title subTitle coverImage tags publishedAt slug'
+        'title subTitle description coverImage tags publishedAt slug'
       );
 
     return res.status(200).json({
