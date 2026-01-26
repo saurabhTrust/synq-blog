@@ -2,36 +2,23 @@ const express = require('express');
 const router = express.Router();
 const blogController = require('../controllers/blogController');
 const upload = require('../middlewares/upload');
-// const { verifyToken } = require('../middleware/auth'); // mentor will handle auth
+
+// Multer execution (fields)
+const blogUpload = upload.fields([
+  { name: 'coverImage', maxCount: 1 },
+  { name: 'contentImages', maxCount: 10 },
+]);
 
 /**
- * Handle image uploads (mentor-style)
+ * Extract coverImage for controller
  */
-const handleImageUploads = (req, res, next) => {
-  const uploadHandler = upload.fields([
-    { name: 'coverImage', maxCount: 1 }, // Blog cover image
-  ]);
+const extractCoverImage = (req, res, next) => {
+  req.file =
+    req.files && req.files.coverImage
+      ? req.files.coverImage[0]
+      : null;
 
-  uploadHandler(req, res, (err) => {
-    if (err) {
-      console.error('Upload error:', err);
-      return res.status(400).json({
-        success: false,
-        message: err.message,
-      });
-    }
-
-    // Normalize files
-    if (req.files && req.files.coverImage && req.files.coverImage.length > 0) {
-      req.file = req.files.coverImage[0];   // single file access
-      req.files = req.files.coverImage;     // array access (future-proof)
-    } else {
-      req.file = null;
-      req.files = [];
-    }
-
-    next();
-  });
+  next();
 };
 
 /**
@@ -39,50 +26,43 @@ const handleImageUploads = (req, res, next) => {
  */
 router.post(
   '/blog',
-  // verifyToken, // mentor will plug this
-  handleImageUploads,
+  blogUpload,
+  extractCoverImage,
   blogController.createDraftBlog
 );
 
 /**
- * Publish blog directly (no draft exists)
- * Create + publish in one go
+ * Publish blog directly
  */
 router.post(
   '/blog/publish',
-  // verifyToken,
-  handleImageUploads,
+  blogUpload,
+  extractCoverImage,
   blogController.publishBlog
 );
 
 /**
- * Publish existing draft blog
- * Only updates status → PUBLISHED
+ * Publish existing draft
  */
 router.post(
   '/blog/:blogId/publish',
-  // verifyToken,
-  handleImageUploads, // optional, allows updating cover image on publish
+  blogUpload,
+  extractCoverImage,
   blogController.publishBlog
 );
 
+/**
+ * Update blog
+ */
 router.put(
   '/blog/:blogId',
-  handleImageUploads,
+  blogUpload,
+  extractCoverImage,
   blogController.updateBlog
 );
 
-router.get(
-  '/blog',
-  // verifyToken (mentor will add)
-  blogController.getAllBlogs
-);
-
-router.delete(
-  '/blog/:blogId',
-  // verifyToken
-  blogController.deleteBlog
-);
-
+router.get('/blog', blogController.getAllBlogs);
+router.get('/blog/:blogId', blogController.getBlogById);
+router.delete('/blog/:blogId', blogController.deleteBlog);
 
 module.exports = router;

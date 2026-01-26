@@ -1,43 +1,136 @@
 const { Blog, BLOG_STATUS } = require('../models/schemas');
 const { uploadToStorage } = require('../services/ipfs');
+const sanitizeContentForResponse = (content = []) => {
+  return content.map(({ _id, ...rest }) => rest);
+};
 
 
-// Create Blog (Draft)
-// Used when admin clicks "Save as Draft"
+// Escape HTML to prevent XSS
+const escapeHtml = (str = '') =>
+  str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 
+// Convert content blocks → render-ready HTML string
+const buildContentString = (content = []) => {
+  return content
+    .map(block => {
+      if (block.type === 'text') {
+        return `<p>${escapeHtml(block.value)}</p>`;
+      }
+
+      if (block.type === 'image') {
+        return `<img src="${block.value}" alt="content-image" loading="lazy" />`;
+      }
+
+      return '';
+    })
+    .join('');
+};
+
+/**
+ * =========================
+ * CREATE DRAFT BLOG
+ * =========================
+ */
 const createDraftBlog = async (req, res) => {
   try {
-    const { title, subTitle, description, tags } = req.body || {};
+    const { title, subTitle, content, tags } = req.body || {};
 
-    const coverImageData = req.file
-      ? await uploadToStorage(req.file) // uploads to IPFS
-      : null;
-
-    if (!title || !description) {
+    // =========================
+    // Validation
+    // =========================
+    if (!title || !content) {
       return res.status(400).json({
         success: false,
-        message: 'Title and description are required',
+        message: 'Title and content are required',
       });
     }
 
+    // =========================
+    // Upload cover image to IPFS
+    // =========================
+    const coverImageData = req.files?.coverImage?.[0]
+      ? await uploadToStorage(req.files.coverImage[0])
+      : null;
+
+    // =========================
+    // Parse tags
+    // =========================
     const parsedTags =
       typeof tags === 'string'
-        ? tags.split(',').map(tag => tag.trim())
+        ? tags.split(',').map(t => t.trim())
         : [];
 
+    // =========================
+    // Parse content safely
+    // =========================
+    let parsedContent;
+
+    try {
+      const parsed = JSON.parse(content);
+      parsedContent = Array.isArray(parsed)
+        ? parsed
+        : [{ type: 'text', value: content }];
+    } catch {
+      parsedContent = [{ type: 'text', value: content }];
+    }
+
+    // =========================
+    // Upload content images to IPFS
+    // =========================
+    const contentImageMap = {};
+
+    if (req.files?.contentImages?.length) {
+      for (let i = 0; i < req.files.contentImages.length; i++) {
+        const file = req.files.contentImages[i];
+        const uploaded = await uploadToStorage(file);
+
+        // Placeholder key must match frontend
+        contentImageMap[`contentImages[${i}]`] = uploaded.ipfsUri;
+      }
+    }
+
+    // =========================
+    // Inject IPFS URLs into content
+    // =========================
+    const finalContent = parsedContent.map(block => {
+      if (block.type === 'image') {
+        return {
+          type: 'image',
+          value: contentImageMap[block.value] || block.value,
+        };
+      }
+      return block;
+    });
+
+    // =========================
+    // Create draft blog
+    // =========================
     const blog = await Blog.create({
       title,
       subTitle,
-      description,
-      coverImage: coverImageData?.ipfsUri || null, // ipfs://CID
+      content: finalContent,
+      coverImage: coverImageData?.ipfsUri || null,
       tags: parsedTags,
       status: BLOG_STATUS.DRAFT,
     });
 
+    // =========================
+    // Prepare response
+    // =========================
+    const blogObj = blog.toObject();
+
+    blogObj.content = sanitizeContentForResponse(blogObj.content);
+    blogObj.contentString = buildContentString(blogObj.content);
+
     return res.status(201).json({
       success: true,
       message: 'Blog saved as draft',
-      data: blog,
+      data: blogObj,
     });
   } catch (error) {
     console.error('Create draft error:', error.message);
@@ -49,16 +142,24 @@ const createDraftBlog = async (req, res) => {
 };
 
 
+
+/**
+ * =========================
+ * PUBLISH BLOG
+ * =========================
+ */
 const publishBlog = async (req, res) => {
   try {
     const { blogId } = req.params;
-    const { title, subTitle, description, tags } = req.body || {};
+    const { title, subTitle, content, tags } = req.body || {};
 
     let blog;
 
-    // ===============================
-    // CASE 1: Publish existing draft
-    // ===============================
+    /**
+     * ===============================
+     * CASE 1: Publish existing draft
+     * ===============================
+     */
     if (blogId) {
       blog = await Blog.findById(blogId);
 
@@ -76,50 +177,100 @@ const publishBlog = async (req, res) => {
         });
       }
 
-      // ✅ Do NOT upload image again
-      // coverImage already contains ipfs://CID from draft
-
       blog.status = BLOG_STATUS.PUBLISHED;
       blog.publishedAt = new Date();
       await blog.save();
     }
 
-    // =================================
-    // CASE 2: Direct publish (no draft)
-    // =================================
+    /**
+     * =================================
+     * CASE 2: Direct publish (no draft)
+     * =================================
+     */
     else {
-      if (!title || !description) {
+      if (!title || !content) {
         return res.status(400).json({
           success: false,
-          message: 'Title and description are required to publish',
+          message: 'Title and content are required to publish',
         });
       }
 
-      // 🔴 Upload to IPFS HERE (only once)
-      const coverImageData = req.file
-        ? await uploadToStorage(req.file)
+      /**
+       * Upload cover image
+       */
+      const coverImageData = req.files?.coverImage?.[0]
+        ? await uploadToStorage(req.files.coverImage[0])
         : null;
 
+      /**
+       * Parse tags
+       */
       const parsedTags =
         typeof tags === 'string'
           ? tags.split(',').map(t => t.trim())
           : [];
 
+      /**
+       * Normalize content (text + images)
+       */
+      let parsedContent;
+      try {
+        const parsed = JSON.parse(content);
+        parsedContent = Array.isArray(parsed)
+          ? parsed
+          : [{ type: 'text', value: content }];
+      } catch {
+        parsedContent = [{ type: 'text', value: content }];
+      }
+
+      /**
+       * Upload content images to IPFS
+       */
+      const contentImageUrls = [];
+
+      if (req.files?.contentImages?.length) {
+        for (const file of req.files.contentImages) {
+          const uploaded = await uploadToStorage(file);
+          contentImageUrls.push(uploaded.ipfsUri);
+        }
+      }
+
+      /**
+       * Final content array
+       */
+      const finalContent = [
+        ...parsedContent,
+        ...contentImageUrls.map(url => ({
+          type: 'image',
+          value: url,
+        })),
+      ];
+
       blog = await Blog.create({
         title,
         subTitle,
-        description,
-        coverImage: coverImageData?.ipfsUri || null, // ipfs://CID
+        content: finalContent,
+        coverImage: coverImageData?.ipfsUri || null,
         tags: parsedTags,
         status: BLOG_STATUS.PUBLISHED,
         publishedAt: new Date(),
       });
     }
 
+    /**
+     * =========================
+     * RESPONSE NORMALIZATION
+     * =========================
+     */
+    const blogObj = blog.toObject();
+
+    blogObj.content = sanitizeContentForResponse(blogObj.content);
+    blogObj.contentString = buildContentString(blogObj.content);
+
     return res.status(200).json({
       success: true,
       message: 'Blog published successfully',
-      data: blog, // coverImage always ipfs://CID
+      data: blogObj,
     });
   } catch (error) {
     console.error('Publish blog error:', error.message);
@@ -130,10 +281,16 @@ const publishBlog = async (req, res) => {
   }
 };
 
+
+/**
+ * =========================
+ * UPDATE BLOG (DRAFT or PUBLISHED)
+ * =========================
+ */
 const updateBlog = async (req, res) => {
   try {
     const { blogId } = req.params;
-    const { title, subTitle, description, tags } = req.body || {};
+    const { title, subTitle, content, tags } = req.body || {};
 
     const blog = await Blog.findById(blogId);
 
@@ -144,13 +301,31 @@ const updateBlog = async (req, res) => {
       });
     }
 
-    // =========================
-    // Update text fields
-    // =========================
+    /**
+     * =========================
+     * Update basic fields
+     * =========================
+     */
     if (title !== undefined) blog.title = title;
     if (subTitle !== undefined) blog.subTitle = subTitle;
-    if (description !== undefined) blog.description = description;
 
+    /**
+     * =========================
+     * Update cover image
+     * =========================
+     */
+    if (req.files?.coverImage?.[0]) {
+      const coverImageData = await uploadToStorage(
+        req.files.coverImage[0]
+      );
+      blog.coverImage = coverImageData?.ipfsUri || null;
+    }
+
+    /**
+     * =========================
+     * Update tags
+     * =========================
+     */
     if (tags !== undefined) {
       blog.tags =
         typeof tags === 'string'
@@ -158,24 +333,59 @@ const updateBlog = async (req, res) => {
           : [];
     }
 
-    // =========================
-    // Update cover image (if provided)
-    // =========================
-    if (req.file) {
-      const coverImageData = await uploadToStorage(req.file);
-      blog.coverImage = coverImageData?.ipfsUri || null;
+    /**
+     * =========================
+     * Update content
+     * =========================
+     */
+    if (content !== undefined) {
+      // Parse content safely
+      let parsedContent;
+      try {
+        const parsed = JSON.parse(content);
+        parsedContent = Array.isArray(parsed)
+          ? parsed
+          : [{ type: 'text', value: content }];
+      } catch {
+        parsedContent = [{ type: 'text', value: content }];
+      }
 
-      // OPTIONAL (recommended later):
-      // if (blog.coverImage) await unpinFromIPFS(oldCid);
+      // Upload new content images (if any)
+      const contentImageUrls = [];
+
+      if (req.files?.contentImages?.length) {
+        for (const file of req.files.contentImages) {
+          const uploaded = await uploadToStorage(file);
+          contentImageUrls.push(uploaded.ipfsUri);
+        }
+      }
+
+      // Merge text + images
+      blog.content = [
+        ...parsedContent,
+        ...contentImageUrls.map(url => ({
+          type: 'image',
+          value: url,
+        })),
+      ];
     }
 
-
     await blog.save();
+
+    /**
+     * =========================
+     * Normalize response
+     * =========================
+     */
+    const blogObj = blog.toObject();
+
+    blogObj.content = sanitizeContentForResponse(blogObj.content);
+    blogObj.contentString = buildContentString(blogObj.content);
 
     return res.status(200).json({
       success: true,
       message: 'Blog updated successfully',
-      data: blog,
+      data: blogObj,
     });
   } catch (error) {
     console.error('Update blog error:', error.message);
@@ -186,6 +396,12 @@ const updateBlog = async (req, res) => {
   }
 };
 
+
+/**
+ * =========================
+ * GET ALL BLOGS (ADMIN)
+ * =========================
+ */
 const getAllBlogs = async (req, res) => {
   try {
     const { status } = req.query;
@@ -197,14 +413,25 @@ const getAllBlogs = async (req, res) => {
 
     const blogs = await Blog.find(filter)
       .sort({ createdAt: -1 })
-      .select(
-        'title subTitle coverImage status createdAt publishedAt'
-      );
+      .select('title subTitle tags content coverImage status createdAt publishedAt');
+
+    const responseBlogs = blogs.map(blog => {
+      const blogObj = blog.toObject();
+
+      // sanitize content blocks
+      const cleanContent = sanitizeContentForResponse(blogObj.content);
+
+      return {
+        ...blogObj,
+        content: cleanContent,
+        contentString: buildContentString(cleanContent),
+      };
+    });
 
     return res.status(200).json({
       success: true,
-      count: blogs.length,
-      data: blogs,
+      count: responseBlogs.length,
+      data: responseBlogs,
     });
   } catch (error) {
     console.error('Get blogs error:', error.message);
@@ -215,6 +442,51 @@ const getAllBlogs = async (req, res) => {
   }
 };
 
+
+const getBlogById = async (req, res) => {
+  try {
+    const { blogId } = req.params;
+
+    const blog = await Blog.findById(blogId)
+      .select(
+        'title subTitle content coverImage tags status createdAt updatedAt publishedAt'
+      );
+
+    if (!blog) {
+      return res.status(404).json({
+        success: false,
+        message: 'Blog not found',
+      });
+    }
+
+    const blogObj = blog.toObject();
+
+    // Remove _id from content blocks
+    blogObj.content = sanitizeContentForResponse(blogObj.content);
+
+    // Generate contentString (same logic you already use)
+    blogObj.contentString = buildContentString(blogObj.content);
+
+    return res.status(200).json({
+      success: true,
+      data: blogObj,
+    });
+  } catch (error) {
+    console.error('Get blog by ID error:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch blog',
+    });
+  }
+};
+
+
+
+/**
+ * =========================
+ * DELETE BLOG
+ * =========================
+ */
 const deleteBlog = async (req, res) => {
   try {
     const { blogId } = req.params;
@@ -228,11 +500,10 @@ const deleteBlog = async (req, res) => {
       });
     }
 
-    // CASE 1: Published → move back to draft (soft delete)
+    // Soft delete: published → draft
     if (blog.status === BLOG_STATUS.PUBLISHED) {
       blog.status = BLOG_STATUS.DRAFT;
       blog.publishedAt = null;
-
       await blog.save();
 
       return res.status(200).json({
@@ -241,7 +512,7 @@ const deleteBlog = async (req, res) => {
       });
     }
 
-    // CASE 2: Draft → hard delete
+    // Hard delete: draft
     if (blog.status === BLOG_STATUS.DRAFT) {
       await Blog.deleteOne({ _id: blogId });
 
@@ -251,7 +522,6 @@ const deleteBlog = async (req, res) => {
       });
     }
 
-    // Fallback (future-proof)
     return res.status(400).json({
       success: false,
       message: 'Invalid blog state',
@@ -266,11 +536,11 @@ const deleteBlog = async (req, res) => {
 };
 
 
-
 module.exports = {
   createDraftBlog,
   publishBlog,
-    updateBlog,
-    getAllBlogs,
-    deleteBlog,
+  updateBlog,
+  getAllBlogs,
+  getBlogById,
+  deleteBlog,
 };

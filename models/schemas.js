@@ -25,10 +25,19 @@ const BlogSchema = new Schema(
       trim: true,
     },
 
-    description: {
+    content: [
+  {
+    type: {
       type: String,
+      enum: ['text', 'image'],
       required: true,
     },
+    value: {
+      type: String, // text OR ipfs://CID
+      required: true,
+    },
+  },
+],
 
     coverImage: {
       type: String, // URL or stored path

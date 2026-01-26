@@ -1,7 +1,6 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
 
 /**
  * Temporary upload directory
@@ -20,7 +19,10 @@ const storage = multer.diskStorage({
     cb(null, TEMP_DIR);
   },
   filename: (req, file, cb) => {
-    cb(null, `${uuidv4()}${path.extname(file.originalname)}`);
+    const uniqueName =
+      Date.now() + '-' + Math.round(Math.random() * 1e9);
+
+    cb(null, `${uniqueName}${path.extname(file.originalname)}`);
   },
 });
 
