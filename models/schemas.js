@@ -25,10 +25,10 @@ const BlogSchema = new Schema(
       trim: true,
     },
 
-    description: {
-      type: String,
-      required: true,
-    },
+    content: {
+  type: String,     // HTML / text / IPFS URLs / anything
+  default: '',      // allow empty content
+},
 
     coverImage: {
       type: String, // URL or stored path
