@@ -404,6 +404,13 @@ const deleteBlog = async (req, res) => {
   try {
     const { blogId } = req.params;
 
+    if (!blogId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Blog ID is required',
+      });
+    }
+
     const blog = await Blog.findById(blogId);
 
     if (!blog) {
@@ -413,11 +420,17 @@ const deleteBlog = async (req, res) => {
       });
     }
 
-    // Soft delete: published → draft
+    // ✅ Soft delete: published → draft (NO save)
     if (blog.status === BLOG_STATUS.PUBLISHED) {
-      blog.status = BLOG_STATUS.DRAFT;
-      blog.publishedAt = null;
-      await blog.save();
+      await Blog.updateOne(
+        { _id: blogId },
+        {
+          $set: {
+            status: BLOG_STATUS.DRAFT,
+            publishedAt: null,
+          },
+        }
+      );
 
       return res.status(200).json({
         success: true,
@@ -425,7 +438,7 @@ const deleteBlog = async (req, res) => {
       });
     }
 
-    // Hard delete: draft
+    // ✅ Hard delete: draft
     if (blog.status === BLOG_STATUS.DRAFT) {
       await Blog.deleteOne({ _id: blogId });
 
@@ -440,7 +453,7 @@ const deleteBlog = async (req, res) => {
       message: 'Invalid blog state',
     });
   } catch (error) {
-    console.error('Delete blog error:', error.message);
+    console.error('Delete blog error:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to delete blog',
