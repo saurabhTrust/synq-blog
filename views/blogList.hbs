@@ -1,0 +1,40 @@
+{{#each blogs}}
+<article style="margin-bottom:40px">
+
+  <h2>{{title}}</h2>
+
+  {{#if subTitle}}
+    <h4>{{subTitle}}</h4>
+  {{/if}}
+
+  {{#if coverImage}}
+    <img src="https://ipfs.io/ipfs/{{coverImageCid}}" />
+  {{/if}}
+
+  {{#if content}}
+    <section>
+      {{{content}}}
+    </section>
+  {{/if}}
+
+  {{#if tags.length}}
+    <p>
+      <strong>Tags:</strong>
+      {{#each tags}}
+        <span>#{{this}}</span>
+      {{/each}}
+    </p>
+  {{/if}}
+
+  <p>
+    <small>
+      Published: {{publishedAt}} <br />
+      Created: {{createdAt}} <br />
+      Updated: {{updatedAt}}
+    </small>
+  </p>
+
+  <a href="/blogs/{{_id}}">Read more →</a>
+
+</article>
+{{/each}}

@@ -63,6 +63,7 @@ router.put(
 
 router.get('/blog', blogController.getAllBlogs);
 router.get('/blog/:blogId', blogController.getBlogById);
+router.get('/blogs/json/:blogId', blogController.getBlogByIdJson);
 router.delete('/blog/:blogId', blogController.deleteBlog);
 
 module.exports = router;
