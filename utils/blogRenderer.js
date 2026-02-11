@@ -47,13 +47,21 @@ function renderBlogListHtml({ blogs }) {
   const body = list({ blogs: normalizedBlogs });
 
   return base({
-    meta: {
-      title: firstBlog.title || 'SynQ Social Blogs',
-      subTitle: firstBlog.subTitle || '',
-      tags: (firstBlog.tags || []).join(' ')
-    },
-    body,
-  });
+  meta: {
+    title:
+      firstBlog.seo?.title ||
+      firstBlog.title ||
+      'SynQ Social Blogs',
+
+    subTitle:
+      firstBlog.seo?.description ||
+      firstBlog.subTitle ||
+      '',
+
+    tags: firstBlog.seo?.keywords || '',
+  },
+  body,
+});
 }
 /**
  * ✅ SINGLE ARTICLE SSR

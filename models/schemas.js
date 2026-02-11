@@ -40,6 +40,12 @@ const BlogSchema = new Schema(
       default: [],
     },
 
+    seo: {
+      title: String,
+      description: String,
+      keywords: String
+    }, 
+
     status: {
       type: String,
       enum: Object.values(BLOG_STATUS),

@@ -13,7 +13,7 @@ const {
  */
 const createDraftBlog = async (req, res) => {
   try {
-    const { title, subTitle, content, tags, coverImage } = req.body || {};
+    const { title, subTitle, content, tags, coverImage, tagsSEO } = req.body || {};
 
     // =========================
     // Validation
@@ -46,6 +46,11 @@ const createDraftBlog = async (req, res) => {
 
       coverImage: coverImage || null,
       tags: parsedTags,
+
+      // ✅ SEO KEYWORDS FROM FRONTEND
+      seo: {
+      keywords: typeof tagsSEO === 'string' ? tagsSEO : '',
+      },
       status: BLOG_STATUS.DRAFT,
     });
 
@@ -95,7 +100,7 @@ const createDraftBlog = async (req, res) => {
 const publishBlog = async (req, res) => {
   try {
     const { blogId } = req.params;
-    const { title, subTitle, content, tags, coverImage } = req.body || {};
+    const { title, subTitle, content, tags, coverImage, tagsSEO } = req.body || {};
 
     let blog;
 
@@ -125,6 +130,13 @@ const publishBlog = async (req, res) => {
       if (typeof content === 'string') {
         blog.content = content;
       }
+      // ✅ ADD THIS BLOCK
+      if (typeof tagsSEO === 'string') {
+      blog.seo = {
+    ...(blog.seo || {}),
+    keywords: tagsSEO,
+  };
+}
 
       blog.status = BLOG_STATUS.PUBLISHED;
       blog.publishedAt = new Date();
@@ -156,6 +168,9 @@ const publishBlog = async (req, res) => {
         content: typeof content === 'string' ? content : '', // ✅ STRING ONLY
         coverImage: coverImage || null,
         tags: parsedTags,
+        seo: {
+        keywords: typeof tagsSEO === 'string' ? tagsSEO : '',
+        },
         status: BLOG_STATUS.PUBLISHED,
         publishedAt: new Date(),
       });
@@ -208,7 +223,7 @@ const publishBlog = async (req, res) => {
 const updateBlog = async (req, res) => {
   try {
     const { blogId } = req.params;
-    const { title, subTitle, content, tags, coverImage } = req.body || {};
+    const { title, subTitle, content, tags, coverImage, tagsSEO} = req.body || {};
 
     const blog = await Blog.findById(blogId);
 
@@ -257,6 +272,12 @@ const updateBlog = async (req, res) => {
     if (content !== undefined) {
       blog.content = typeof content === 'string' ? content : '';
     }
+    if (tagsSEO !== undefined) {
+     blog.seo = {
+    ...(blog.seo || {}),
+    keywords: typeof tagsSEO === 'string' ? tagsSEO : '',
+    };
+  }
 
     await blog.save();
 
@@ -380,6 +401,7 @@ const getBlogById = async (req, res) => {
           coverImage: blogObj.coverImage,
           content: blogObj.content || '',
           tags: blogObj.tags || [],
+          seo: blogObj.seo || {},
           publishedAt: blogObj.publishedAt,
           createdAt: blogObj.createdAt,
           updatedAt: blogObj.updatedAt,
