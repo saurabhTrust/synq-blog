@@ -5,6 +5,7 @@ const {
   buildContentString,
 } = require('../utils/blog');
 
+
 /**
  * =========================
  * CREATE DRAFT BLOG
@@ -357,7 +358,7 @@ const getAllBlogs = async (req, res) => {
 
 
 
-const { renderArticleHtml } = require('../utils/blogRenderer');
+const { renderBlogListHtml } = require('../utils/blogRenderer');
 
 const getBlogById = async (req, res) => {
   try {
@@ -369,26 +370,66 @@ const getBlogById = async (req, res) => {
 
     const blogObj = blog.toObject();
 
-    // Build full HTML (article + layout)
-    const html = renderArticleHtml({
-      title: blogObj.title,
-      subTitle: blogObj.subTitle,
-
-      // ✅ STRING CONTENT DIRECTLY
-      content: blogObj.content || '',
-
-      coverImage: blogObj.coverImage,
-      tags: blogObj.tags,
-      publishedAt: blogObj.publishedAt,
-      status: blogObj.status,
+    // ✅ Wrap single blog inside array for blogList.hbs
+    const html = renderBlogListHtml({
+      blogs: [
+        {
+          _id: blogObj._id,
+          title: blogObj.title,
+          subTitle: blogObj.subTitle,
+          coverImage: blogObj.coverImage,
+          content: blogObj.content || '',
+          tags: blogObj.tags || [],
+          publishedAt: blogObj.publishedAt,
+          createdAt: blogObj.createdAt,
+          updatedAt: blogObj.updatedAt,
+        }
+      ]
     });
 
     res.setHeader('Content-Type', 'text/html');
-
     return res.status(200).send(html);
   } catch (err) {
     console.error('Get blog by ID error:', err.message);
     return res.status(500).send('Failed to fetch blog');
+  }
+};
+
+const getBlogByIdJson = async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.blogId);
+
+    if (!blog) {
+      return res.status(404).json({
+        success: false,
+        message: 'Blog not found',
+      });
+    }
+
+    const blogObj = blog.toObject();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        _id: blogObj._id,
+        title: blogObj.title,
+        subTitle: blogObj.subTitle,
+        coverImage: blogObj.coverImage,   // raw ipfs://
+        content: blogObj.content || '',
+        tags: blogObj.tags || [],
+        status: blogObj.status,
+        publishedAt: blogObj.publishedAt,
+        createdAt: blogObj.createdAt,
+        updatedAt: blogObj.updatedAt,
+      }
+    });
+
+  } catch (err) {
+    console.error('Get blog by ID JSON error:', err.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch blog',
+    });
   }
 };
 
@@ -468,5 +509,6 @@ module.exports = {
   updateBlog,
   getAllBlogs,
   getBlogById,
+  getBlogByIdJson,
   deleteBlog,
 };

@@ -1,45 +1,78 @@
-const Handlebars = require('handlebars');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
+const Handlebars = require('handlebars');
 
-// escape text for safety (kept for future use, not removed)
-const escapeHtml = (str = '') =>
-  str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+const baseTemplate = fs.readFileSync(
+  path.join(__dirname, '../views/layouts/base.hbs'),
+  'utf8'
+);
+
+const listTemplate = fs.readFileSync(
+  path.join(__dirname, '../views/blogList.hbs'),
+  'utf8'
+);
+
+const articleTemplate = fs.readFileSync(
+  path.join(__dirname, '../views/article.hbs'),
+  'utf8'
+);
+
+const base = Handlebars.compile(baseTemplate);
+const list = Handlebars.compile(listTemplate);
+const article = Handlebars.compile(articleTemplate);
 
 /**
- * Render full article HTML using handlebars
- * content = STRING (HTML or plain text)
+ * ✅ Extract CID from ipfs://CID
  */
-const renderArticleHtml = ({ title, subTitle, content }) => {
-  const baseTemplate = fs.readFileSync(
-    path.join(__dirname, '../views/layouts/base.hbs'),
-    'utf8'
-  );
+function extractIpfsCid(url) {
+  if (!url) return null;
+  if (url.startsWith('ipfs://')) {
+    return url.replace('ipfs://', '');
+  }
+  return null;
+}
 
-  const articleTemplate = fs.readFileSync(
-    path.join(__dirname, '../views/article.hbs'),
-    'utf8'
-  );
+/**
+ * ✅ BLOG LIST SSR
+ */
+function renderBlogListHtml({ blogs }) {
+  // 🔥 NORMALIZE blogs for template
+  const normalizedBlogs = blogs.map(blog => ({
+    ...blog,
+    coverImageCid: extractIpfsCid(blog.coverImage),
+  }));
 
-  const articleHtml = Handlebars.compile(articleTemplate)({
+  const firstBlog = normalizedBlogs[0] || {};
+
+  const body = list({ blogs: normalizedBlogs });
+
+  return base({
+    meta: {
+      title: firstBlog.title || 'SynQ Social Blogs',
+      subTitle: firstBlog.subTitle || '',
+      tags: (firstBlog.tags || []).join(' ')
+    },
+    body,
+  });
+}
+/**
+ * ✅ SINGLE ARTICLE SSR
+ */
+function renderArticleHtml({ title, subTitle, content, coverImage }) {
+  const body = article({
     title,
     subTitle,
-    content: content || '', // ✅ DIRECT STRING PASS (safe fallback)
+    content,
+    coverImageCid: extractIpfsCid(coverImage),
   });
 
-  const finalHtml = Handlebars.compile(baseTemplate)({
+  return base({
     title,
-    body: articleHtml,
+    body,
   });
-
-  return finalHtml;
-};
+}
 
 module.exports = {
+  renderBlogListHtml,
   renderArticleHtml,
 };

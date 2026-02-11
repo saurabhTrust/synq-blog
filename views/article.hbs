@@ -1,11 +1,31 @@
 <article>
   <h1>{{title}}</h1>
+  <h3>{{subTitle}}</h3>
 
-  {{#if subTitle}}
-    <h3>{{subTitle}}</h3>
+  {{#if coverImage}}
+    <img src="{{coverImage}}" alt="cover-image" />
+  {{/if}}
+
+  {{#if publishedAt}}
+    <p><strong>Published:</strong> {{publishedAt}}</p>
+  {{/if}}
+
+  {{#if tags.length}}
+    <p><strong>Tags:</strong>
+      {{#each tags}}
+        <span>#{{this}}</span>
+      {{/each}}
+    </p>
   {{/if}}
 
   <section>
-    {{{content}}}
+    {{{contentHtml}}}
   </section>
+
+  <hr />
+
+  <footer>
+    {{#if createdAt}}<small>Created: {{createdAt}}</small><br />{{/if}}
+    {{#if updatedAt}}<small>Updated: {{updatedAt}}</small>{{/if}}
+  </footer>
 </article>
