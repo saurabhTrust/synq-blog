@@ -42,14 +42,19 @@ function renderBlogListHtml({ blogs }) {
     coverImageCid: extractIpfsCid(blog.coverImage),
   }));
 
+  const firstBlog = normalizedBlogs[0] || {};
+
   const body = list({ blogs: normalizedBlogs });
 
   return base({
-    title: 'SynQ Social Blogs',
+    meta: {
+      title: firstBlog.title || 'SynQ Social Blogs',
+      subTitle: firstBlog.subTitle || '',
+      tags: (firstBlog.tags || []).join(' ')
+    },
     body,
   });
 }
-
 /**
  * ✅ SINGLE ARTICLE SSR
  */
