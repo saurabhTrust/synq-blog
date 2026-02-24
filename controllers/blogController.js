@@ -381,6 +381,11 @@ const getAllBlogs = async (req, res) => {
 
 const { renderBlogListHtml } = require('../utils/blogRenderer');
 
+const formatDateShort = (date) => {
+  if (!date) return '';
+  return new Date(date).toDateString();
+};
+
 const getBlogById = async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.blogId);
@@ -402,9 +407,8 @@ const getBlogById = async (req, res) => {
           content: blogObj.content || '',
           tags: blogObj.tags || [],
           seo: blogObj.seo || {},
-          publishedAt: blogObj.publishedAt,
-          createdAt: blogObj.createdAt,
-          updatedAt: blogObj.updatedAt,
+          publishedAt: formatDateShort(blogObj.publishedAt),
+          updatedAt: formatDateShort(blogObj.updatedAt),
         }
       ]
     });
