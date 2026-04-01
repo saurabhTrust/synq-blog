@@ -403,7 +403,6 @@ const getBlogById = async (req, res) => {
           _id: blogObj._id,
           title: blogObj.title,
           subTitle: blogObj.subTitle,
-          coverImage: blogObj.coverImage,
           content: blogObj.content || '',
           tags: blogObj.tags || [],
           seo: blogObj.seo || {},
